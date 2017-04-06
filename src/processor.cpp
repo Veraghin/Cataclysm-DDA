@@ -133,7 +133,7 @@ void processor_data::load( JsonObject &jo, const std::string & )
 {
     mandatory( jo, was_loaded, "next_type", next_type );
     mandatory( jo, was_loaded, "fuel_type", fuel_type );
-    mandatory( jo, was_loaded, "processes", processes, string_id_reader<process_id>() );
+    mandatory( jo, was_loaded, "processes", processes, string_id_reader<process_data>{} );
 
     if( !was_loaded || jo.has_member( "messages" ) ) {
         JsonObject messages_obj = jo.get_object( "messages" );
@@ -192,19 +192,19 @@ const process_data& select_active(const tripoint &examp )
     processor_id pid = get_processor_id(examp);
     const processor_data &current_processor = processors_data.obj(pid);
     //Make an object list of processes
-    std::vector<process_data> *possible_processes = new std::vector<process_data>();
+    std::vector<const process_data *> possible_processes;
     for (const process_id &p : current_processor.processes) {
-        possible_processes->push_back( processes_data.obj( p ));
+        possible_processes.push_back( &processes_data.obj(p));
     }
     //Figure out active process
     const process_data *active_process = nullptr;
-    if (possible_processes->size() == 1) {
-        return possible_processes->at(0);
+    if (possible_processes.size() == 1) {
+        return *possible_processes.at(0);
     }
     const map_stack items = g->m.i_at( examp );
     if (items.empty()) {
         //Temporary solution, should be expanded into player being able to depsit directly form inventory after choosing a process
-        return possible_processes->at(0);
+        return *possible_processes.at(0);
     }
     //Build a set of item_id's present
     std::set<itype_id> present_items;
@@ -213,20 +213,20 @@ const process_data& select_active(const tripoint &examp )
     }
     //Based on the items present, find the process which has all components
     //available and the largest number of required components
-    for (const process_data &data : (*possible_processes) ) {
-        if (IsSubset(present_items, data.components)) {
+    for (const process_data* data : possible_processes ) {
+        if (IsSubset(present_items, data->components)) {
             if (!active_process) {
                 //if nullpointer, set it as active
-                active_process = &data;
+                active_process = data;
             }
-            else if (active_process->components.size() < data.components.size()) {
-                active_process = &data;
+            else if (active_process->components.size() < data->components.size()) {
+                active_process = data;
             }
         }
     }
     if (!active_process) {
         //If we can't decide based on the items, make the first process active
-        active_process = &possible_processes->at(0);
+        active_process = possible_processes.at(0);
     }
     return *active_process;
 }
