@@ -5,6 +5,7 @@
 #include "input.h"
 #include "output.h"
 #include "rng.h"
+#include "string_formatter.h"
 #include "translations.h"
 #include "text_snippets.h"
 #include <cmath>  // max in help_main
@@ -696,18 +697,17 @@ that they would cause frostbite. If you're having trouble staying warm over nigh
 of clothing on the floor to sleep on." ) );
 
     text.push_back( _( "\
-Your clothing can sit in one of four layers on your body: next-to-skin, standard, over, and belted. \
-You can wear one item from each layer on a body part without incurring an encumbrance penalty for \
-too many worn items. Any items beyond the first on each layer add an additional 10 points to the body \
-part's encumbrance. (However, you can wear one additional item that would be encumbrance 0 before \
-fitting, and is fitted anyway, without incurring that penalty.)" ) );
+Your clothing can sit in one of five layers on your body: next-to-skin, standard, waist, over, \
+and belted. You can wear one item from each layer on a body part without incurring an \
+encumbrance penalty for too many worn items. Any items beyond the first on each layer add the \
+encumbrance of the additional article(s) of clothing to the body part's encumbrance. The \
+layering penalty applies a minimum of 2 and a maximum of 10 encumbrance per article of clothing." ) );
 
     text.push_back( _( "\
 For example, on her torso, a character might wear a leather corset (next-to-skin), a leather touring \
 suit (standard), a trenchcoat (over), and a survivor's runner pack (belted). Her encumbrance penalty \
-is 0. She could also wear one encumbrance 0 fitted item on any layer without triggering the penalty: \
-for example, a tank top (next-to-skin) or a t-shirt (standard). If she put on a tank top AND a \
-t-shirt, one of them would be penalized, bringing her encumbrance to 1." ) );
+is 0.  If she put on a tank top it would conflict with the leather touring suit and add the minimum \
+encumbrance penalty of 2." ) );
 
     return text;
 }
@@ -1032,8 +1032,6 @@ A: Ask the helpful people on the forum at smf.cataclysmdda.com or at the irc cha
 
     return text;
 }
-
-extern input_context get_default_mode_input_context();
 
 void display_help()
 {

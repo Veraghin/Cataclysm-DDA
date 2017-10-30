@@ -6,6 +6,7 @@
 #include "json.h"
 #include "string_id.h"
 #include "int_id.h"
+#include "units.h"
 #include <string>
 #include <functional>
 
@@ -67,20 +68,21 @@ struct trap {
 
         long sym;
         nc_color color;
-        std::string name;
     private:
         int visibility; // 1 to ??, affects detection
         int avoidance;  // 0 to ??, affects avoidance
         int difficulty; // 0 to ??, difficulty of assembly & disassembly
         bool benign = false;
         trap_function act;
+        std::string name_;
         /**
          * If an item with this weight or more is thrown onto the trap, it triggers.
          */
-        int trigger_weight;
+        units::mass trigger_weight = units::mass( -1, units::mass::unit_type{} );
         int funnel_radius_mm;
         std::vector<itype_id> components; // For disassembly?
     public:
+        std::string name() const;
         /**
          * How easy it is to spot the trap. Smaller values means it's easier to spot.
          */
@@ -155,9 +157,9 @@ struct trap {
         /**
          * @name Funnels
          *
-         * Traps can act as funnels, for this they need a @ref funnel_radius_mm > 0.
-         * Funnels are usual not hidden at all (@ref visibility == 0), are @ref benign and can
-         * be picked up easily (@ref difficulty == 0).
+         * Traps can act as funnels, for this they need a @ref trap::funnel_radius_mm > 0.
+         * Funnels are usual not hidden at all (@ref trap::visibility == 0), are @ref trap::benign and can
+         * be picked up easily (@ref trap::difficulty == 0).
          * The funnel filling is handled in weather.cpp. is_funnel is used the check whether the
          * funnel specific code should be run for this trap.
          */
@@ -177,12 +179,12 @@ struct trap {
          * Those functions are used by the @ref DynamicDataLoader, see there.
          */
         /**
-         * Loads the trap and adds it to the @ref trapmap, and the @ref traplist.
+         * Loads the trap and adds it to the trapmap, and the traplist.
          * @throw std::string if the json is invalid as usual.
          */
         static void load_trap( JsonObject &jo, const std::string &src );
         /**
-         * Releases the loaded trap objects in @ref trapmap and @ref traplist.
+         * Releases the loaded trap objects in trapmap and traplist.
          */
         static void reset();
         /**
@@ -205,7 +207,6 @@ extern trap_id
 tr_null,
 tr_bubblewrap,
 tr_cot,
-tr_brazier,
 tr_funnel,
 tr_metal_funnel,
 tr_makeshift_funnel,

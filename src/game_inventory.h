@@ -22,7 +22,8 @@ namespace inv
 *
 * The functions here execute customized inventory menus for specific game situations.
 * Each menu displays only related inventory (or nearby) items along with context dependent information.
-* More functions will follow. @todo update all 'inv_for...()' functions to return @ref item_location instead of @ref int and move them here.
+* More functions will follow. @todo update all 'inv_for...()' functions to return @ref item_location instead of
+* plain int and move them here.
 * @return Either location of the selected item or null location if none was selected.
 */
 /*@{*/
@@ -42,6 +43,8 @@ int wear( player &p );
  */
 std::list<std::pair<int, int>> multidrop( player &p );
 
+/** Consuming an item. */
+item_location consume( player &p );
 /** Choosing a container for liquid. */
 item_location container_for( player &p, const item &liquid, int radius = 0 );
 /** Item disassembling menu. */
@@ -54,6 +57,12 @@ item_location read( player &p );
 item_location steal( player &p, player &victim );
 /** Item activation menu. */
 item_location use( player &p );
+/** Item wielding/unwielding menu. */
+item_location wield( player &p );
+/** Item wielding/unwielding menu. */
+item_location holster( player &p, item &holster );
+/** Choosing a gun to saw down it's barell. */
+item_location saw_barrel( player &p, item &tool );
 /*@}*/
 
 }

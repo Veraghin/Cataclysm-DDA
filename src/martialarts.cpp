@@ -10,6 +10,7 @@
 #include <string>
 #include <algorithm>
 #include "generic_factory.h"
+#include "string_formatter.h"
 
 const skill_id skill_melee( "melee" );
 const skill_id skill_bashing( "bashing" );
@@ -63,6 +64,7 @@ void ma_requirements::load( JsonObject &jo, const std::string & )
 void ma_technique::load( JsonObject &jo, const std::string &src )
 {
     optional( jo, was_loaded, "name", name, translated_string_reader );
+    optional( jo, was_loaded, "description", description, translated_string_reader );
 
     if( jo.has_member( "messages" ) ) {
         JsonArray jsarr = jo.get_array("messages");
@@ -102,12 +104,14 @@ void ma_technique::load( JsonObject &jo, const std::string &src )
 // Not implemented on purpose (martialart objects have no integer id)
 // int_id<T> string_id<mabuff>::id() const;
 
+/** @relates string_id */
 template<>
 const ma_technique &string_id<ma_technique>::obj() const
 {
     return ma_techniques.obj( *this );
 }
 
+/** @relates string_id */
 template<>
 bool string_id<ma_technique>::is_valid() const
 {
@@ -135,12 +139,14 @@ void ma_buff::load( JsonObject &jo, const std::string &src )
 // Not implemented on purpose (martialart objects have no integer id)
 // int_id<T> string_id<mabuff>::id() const;
 
+/** @relates string_id */
 template<>
 const ma_buff &string_id<ma_buff>::obj() const
 {
     return ma_buffs.obj( *this );
 }
 
+/** @relates string_id */
 template<>
 bool string_id<ma_buff>::is_valid() const
 {
@@ -184,6 +190,7 @@ void martialart::load( JsonObject &jo, const std::string & )
     optional( jo, was_loaded, "weapons", weapons, auto_flags_reader<itype_id>{} );
 
     optional( jo, was_loaded, "strictly_unarmed", strictly_unarmed, false );
+    optional( jo, was_loaded, "force_unarmed", force_unarmed, false );
 
     optional( jo, was_loaded, "leg_block", leg_block, 99 );
     optional( jo, was_loaded, "arm_block", arm_block, 99 );
@@ -195,12 +202,14 @@ void martialart::load( JsonObject &jo, const std::string & )
 // Not implemented on purpose (martialart objects have no integer id)
 // int_id<T> string_id<martialart>::id() const;
 
+/** @relates string_id */
 template<>
 const martialart &string_id<martialart>::obj() const
 {
     return martialarts.obj( *this );
 }
 
+/** @relates string_id */
 template<>
 bool string_id<martialart>::is_valid() const
 {
@@ -330,7 +339,7 @@ bool ma_requirements::is_valid_player( const player &u ) const
     //to all weapons (such as Ninjutsu sneak attacks or innate weapon techniques like RAPID)
     //or if the weapon is flagged as being compatible with the style. Some techniques have
     //further restrictions on required weapon properties (is_valid_weapon).
-    bool cqb = u.has_active_bionic("bio_cqb");
+    bool cqb = u.has_active_bionic( bionic_id( "bio_cqb" ) );
     // There are 4 different cases of "armedness":
     // Truly unarmed, unarmed weapon, style-allowed weapon, generic weapon
     bool valid_weapon =
@@ -569,11 +578,11 @@ bool martialart::weapon_valid( const item &it ) const
 // Player stuff
 
 // technique
-std::vector<matec_id> player::get_all_techniques() const
+std::vector<matec_id> player::get_all_techniques( const item &weap ) const
 {
     std::vector<matec_id> tecs;
     // Grab individual item techniques
-    const auto &weapon_techs = weapon.get_techniques();
+    const auto &weapon_techs = weap.get_techniques();
     tecs.insert( tecs.end(), weapon_techs.begin(), weapon_techs.end() );
     // and martial art techniques
     const auto &style = style_selected.obj();
@@ -583,9 +592,9 @@ std::vector<matec_id> player::get_all_techniques() const
 }
 
 // defensive technique-related
-bool player::has_miss_recovery_tec() const
+bool player::has_miss_recovery_tec( const item &weap ) const
 {
-    for( auto &technique : get_all_techniques() ) {
+    for( auto &technique : get_all_techniques( weap ) ) {
         if( technique.obj().miss_recovery ) {
             return true;
         }
@@ -593,9 +602,10 @@ bool player::has_miss_recovery_tec() const
     return false;
 }
 
+// This one isn't used with a weapon
 bool player::has_grab_break_tec() const
 {
-    for( auto &technique : get_all_techniques() ) {
+    for( auto &technique : get_all_techniques( ret_null ) ) {
         if( technique.obj().grab_break ) {
             return true;
         }
@@ -607,13 +617,13 @@ bool player::can_leg_block() const
 {
     const martialart &ma = style_selected.obj();
     ///\EFFECT_UNARMED increases ability to perform leg block
-    int unarmed_skill = has_active_bionic("bio_cqb") ? 5 : (int)get_skill_level(skill_id("unarmed"));
+    int unarmed_skill = has_active_bionic( bionic_id( "bio_cqb" ) ) ? 5 : (int)get_skill_level(skill_id("unarmed"));
 
     // Success conditions.
     if(hp_cur[hp_leg_l] > 0 || hp_cur[hp_leg_r] > 0) {
         if( unarmed_skill >= ma.leg_block ) {
             return true;
-        } else if( ma.leg_block_with_bio_armor_legs && has_bionic("bio_armor_legs") ) {
+        } else if( ma.leg_block_with_bio_armor_legs && has_bionic( bionic_id( "bio_armor_legs" ) ) ) {
             return true;
         }
     }
@@ -625,13 +635,13 @@ bool player::can_arm_block() const
 {
     const martialart &ma = style_selected.obj();
     ///\EFFECT_UNARMED increases ability to perform arm block
-    int unarmed_skill = has_active_bionic("bio_cqb") ? 5 : (int)get_skill_level(skill_id("unarmed"));
+    int unarmed_skill = has_active_bionic( bionic_id( "bio_cqb" ) ) ? 5 : (int)get_skill_level(skill_id("unarmed"));
 
     // Success conditions.
     if (hp_cur[hp_arm_l] > 0 || hp_cur[hp_arm_r] > 0) {
         if( unarmed_skill >= ma.arm_block ) {
             return true;
-        } else if( ma.arm_block_with_bio_armor_arms && has_bionic("bio_armor_arms") ) {
+        } else if( ma.arm_block_with_bio_armor_arms && has_bionic( bionic_id( "bio_armor_arms" ) ) ) {
             return true;
         }
     }

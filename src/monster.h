@@ -20,7 +20,8 @@ enum field_id : int;
 using mfaction_id = int_id<monfaction>;
 using mtype_id = string_id<mtype>;
 
-typedef std::map< mfaction_id, std::set< int > > mfactions;
+class monster;
+typedef std::map< mfaction_id, std::set< monster * > > mfactions;
 
 class mon_special_attack : public JsonSerializer
 {
@@ -92,7 +93,7 @@ class monster : public Creature, public JsonSerializer, public JsonDeserializer
         std::string disp_name( bool possessive = false ) const override;
         std::string skin_name() const override;
         void get_HP_Bar( nc_color &color, std::string &text ) const;
-        void get_Attitude( nc_color &color, std::string &text ) const;
+        std::pair<std::string, nc_color> get_attitude() const;
         int print_info( WINDOW *w, int vStart, int vLines, int column ) const override;
 
         // Information on how our symbol should appear
@@ -157,6 +158,7 @@ class monster : public Creature, public JsonSerializer, public JsonDeserializer
          * This will cause the monster to slowly move towards the destination,
          * unless there is an overriding smell or plan.
          *
+         * @param p Destination of monster's wonderings
          * @param f The priority of the destination, as well as how long we should
          *          wander towards there.
          */
@@ -184,6 +186,7 @@ class monster : public Creature, public JsonSerializer, public JsonDeserializer
          * costs at the target, an existing NPC or monster, this function simply
          * aborts and does nothing.
          *
+         * @param p Destination of movement
          * @param force If this is set to true, the movement will happen even if
          *              there's currently something blocking the destination.
          *
@@ -214,6 +217,7 @@ class monster : public Creature, public JsonSerializer, public JsonDeserializer
          * Try to push away whatever occupies p, then step in.
          * May recurse and try to make the creature at p push further.
          *
+         * @param p Location of pushed object
          * @param boost A bonus on the roll to represent a horde pushing from behind
          * @param depth Number of recursions so far
          *
@@ -278,12 +282,12 @@ class monster : public Creature, public JsonSerializer, public JsonDeserializer
         /** Processes effects which may prevent the monster from moving (bear traps, crushed, etc.).
          *  Returns false if movement is stopped. */
         bool move_effects( bool attacking ) override;
-        /** Handles any monster-specific effect application effects before calling Creature::add_eff_effects(). */
-        void add_eff_effects( effect e, bool reduced ) override;
         /** Performs any monster-specific modifications to the arguments before passing to Creature::add_effect(). */
         void add_effect( const efftype_id &eff_id, int dur, body_part bp = num_bp,
                          bool permanent = false,
                          int intensity = 0, bool force = false ) override;
+        /** Returns a std::string containing effects for descriptions */
+        std::string get_effect_status() const;
 
         float power_rating() const override;
         float speed_rating() const override;
@@ -350,6 +354,7 @@ class monster : public Creature, public JsonSerializer, public JsonDeserializer
         /**
          * Makes monster react to heard sound
          *
+         * @param from Location of the sound source
          * @param source_volume Volume at the center of the sound source
          * @param distance Distance to sound source (currently just rl_dist)
          */
@@ -361,8 +366,10 @@ class monster : public Creature, public JsonSerializer, public JsonDeserializer
         field_id gibType() const override;
 
         void add_msg_if_npc( const char *msg, ... ) const override PRINTF_LIKE( 2, 3 );
-        void add_msg_if_npc( game_message_type type, const char *msg, ... ) const override PRINTF_LIKE( 3, 4 );
-        void add_msg_player_or_npc( const char *, const char *npc_str, ... ) const override PRINTF_LIKE( 3, 4 );
+        void add_msg_if_npc( game_message_type type, const char *msg,
+                             ... ) const override PRINTF_LIKE( 3, 4 );
+        void add_msg_player_or_npc( const char *, const char *npc_str,
+                                    ... ) const override PRINTF_LIKE( 3, 4 );
         void add_msg_player_or_npc( game_message_type type, const char *, const char *npc_str,
                                     ... ) const override PRINTF_LIKE( 4, 5 );
 
@@ -405,9 +412,9 @@ class monster : public Creature, public JsonSerializer, public JsonDeserializer
         std::map<std::string, int> ammo;
 
         /**
-         * Convert this monster into an item (see @ref mtype::revet_to_itype).
+         * Convert this monster into an item (see @ref mtype::revert_to_itype).
          * Only useful for robots and the like, the monster must have at least
-         * a non-empty item id as revet_to_itype.
+         * a non-empty item id as revert_to_itype.
          */
         item to_item() const;
         /**
@@ -449,6 +456,9 @@ class monster : public Creature, public JsonSerializer, public JsonDeserializer
     protected:
         void store( JsonOut &jsout ) const;
         void load( JsonObject &jsin );
+
+        /** Processes monster-specific effects of an effect. */
+        void process_one_effect( effect &e, bool is_new ) override;
 };
 
 #endif

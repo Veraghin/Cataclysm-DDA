@@ -171,12 +171,14 @@ struct requirement_data {
         /**
          * Load @ref tools, @ref qualities and @ref components from
          * the json object. Assumes them to be in sub-objects.
+         * @param jsobj Object to load data from
          * @param id provide (or override) unique id for this instance
          */
         static void load_requirement( JsonObject &jsobj, const std::string &id = "" );
 
         /**
          * Store requirement data for future lookup
+         * @param req Data to save
          * @param id provide (or override) unique id for this instance
          */
         static void save_requirement( const requirement_data &req, const std::string &id = "" );
@@ -214,7 +216,7 @@ struct requirement_data {
         bool can_make_with_inventory( const inventory &crafting_inv, int batch = 1 ) const;
 
         std::vector<std::string> get_folded_components_list( int width, nc_color col,
-                const inventory &crafting_inv, int batch = 1 ) const;
+                const inventory &crafting_inv, int batch = 1, std::string hilite = "" ) const;
 
         std::vector<std::string> get_folded_tools_list( int width, nc_color col,
                 const inventory &crafting_inv, int batch = 1 ) const;
@@ -248,7 +250,7 @@ struct requirement_data {
 
         template<typename T>
         std::vector<std::string> get_folded_list( int width, const inventory &crafting_inv,
-                const std::vector< std::vector<T> > &objs, int batch = 1 ) const;
+                const std::vector< std::vector<T> > &objs, int batch = 1, std::string hilite = "" ) const;
 
         template<typename T>
         static bool any_marked_available( const std::vector<T> &comps );

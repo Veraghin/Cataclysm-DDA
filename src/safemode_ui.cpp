@@ -6,6 +6,7 @@
 #include "debug.h"
 #include "catacharset.h"
 #include "translations.h"
+#include "string_formatter.h"
 #include "cata_utility.h"
 #include "path_info.h"
 #include "filesystem.h"
@@ -637,14 +638,10 @@ bool safemode::save( const bool is_character_in )
     if( is_character ) {
         file = world_generator->active_world->world_path + "/" + base64_encode(
                    g->u.name ) + ".sfm.json";
-        std::ifstream fin;
-
-        fin.open( ( world_generator->active_world->world_path + "/" +
-                    base64_encode( g->u.name ) + ".sav" ).c_str() );
-        if( !fin.is_open() ) {
+        if( !file_exist( world_generator->active_world->world_path + "/" +
+                         base64_encode( g->u.name ) + ".sav" ) ) {
             return true; //Character not saved yet.
         }
-        fin.close();
     }
 
     return write_to_file( file, [&]( std::ostream & fout ) {

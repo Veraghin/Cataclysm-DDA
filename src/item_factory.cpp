@@ -9,8 +9,10 @@
 #include "debug.h"
 #include "enums.h"
 #include "assign.h"
+#include "string_formatter.h"
 #include "init.h"
 #include "item.h"
+#include "ammo.h"
 #include "item_group.h"
 #include "iuse_actor.h"
 #include "json.h"
@@ -45,7 +47,7 @@ static void set_allergy_flags( itype &item_template );
 static void hflesh_to_flesh( itype &item_template );
 static void npc_implied_flags( itype &item_template );
 
-extern const double MIN_RECOIL;
+extern const double MAX_RECOIL;
 
 bool item_is_blacklisted(const std::string &id)
 {
@@ -136,7 +138,7 @@ void Item_factory::finalize() {
             obj.use_methods.emplace( func, usage_from_string( func ) );
         }
 
-        if( obj.engine && get_world_option<bool>( "NO_FAULTS" ) ) {
+        if( obj.engine && get_option<bool>( "NO_FAULTS" ) ) {
             obj.engine->faults.clear();
         }
 
@@ -208,7 +210,7 @@ void Item_factory::finalize() {
         }
         // for magazines ensure default_ammo is set
         if( obj.magazine && obj.magazine->default_ammo == "NULL" ) {
-               obj.magazine->default_ammo = default_ammo( obj.magazine->type );
+               obj.magazine->default_ammo = obj.magazine->type->default_ammotype();
         }
         if( obj.gun ) {
             // @todo add explicit action field to gun definitions
@@ -258,7 +260,7 @@ void Item_factory::finalize() {
         if( obj.comestible ) {
             obj.comestible->spoils *= HOURS( 1 ); // JSON specifies hours so convert to turns
 
-            if( get_world_option<bool>( "NO_VITAMINS" ) ) {
+            if( get_option<bool>( "NO_VITAMINS" ) ) {
                 obj.comestible->vitamins.clear();
             } else if( obj.comestible->vitamins.empty() && obj.comestible->healthy >= 0 ) {
                 // Default vitamins of healthy comestibles to their edible base materials if none explicitly specified.
@@ -407,9 +409,9 @@ class iuse_function_wrapper : public iuse_actor
             : iuse_actor( type ), cpp_function( f ) { }
 
         ~iuse_function_wrapper() override = default;
-        long use( player *p, item *it, bool a, const tripoint &pos ) const override {
+        long use( player &p, item &it, bool a, const tripoint &pos ) const override {
             iuse tmp;
-            return ( tmp.*cpp_function )( p, it, a, pos );
+            return ( tmp.*cpp_function )( &p, &it, a, pos );
         }
         iuse_actor *clone() const override {
             return new iuse_function_wrapper( *this );
@@ -481,6 +483,7 @@ void Item_factory::init()
     add_iuse( "ELEC_CHAINSAW_ON", &iuse::elec_chainsaw_on );
     add_iuse( "EXTINGUISHER", &iuse::extinguisher );
     add_iuse( "EYEDROPS", &iuse::eyedrops );
+    add_iuse( "FEEDCATTLE", &iuse::feedcattle );
     add_iuse( "FIRECRACKER", &iuse::firecracker );
     add_iuse( "FIRECRACKER_ACT", &iuse::firecracker_act );
     add_iuse( "FIRECRACKER_PACK", &iuse::firecracker_pack );
@@ -558,7 +561,6 @@ void Item_factory::init()
     add_iuse( "RM13ARMOR_ON", &iuse::rm13armor_on );
     add_iuse( "ROBOTCONTROL", &iuse::robotcontrol );
     add_iuse( "ROYAL_JELLY", &iuse::royal_jelly );
-    add_iuse( "SAW_BARREL", &iuse::saw_barrel );
     add_iuse( "SEED", &iuse::seed );
     add_iuse( "SEWAGE", &iuse::sewage );
     add_iuse( "SEW_ADVANCED", &iuse::sew_advanced );
@@ -582,7 +584,7 @@ void Item_factory::init()
     add_iuse( "UNFOLD_GENERIC", &iuse::unfold_generic );
     add_iuse( "UNPACK_ITEM", &iuse::unpack_item );
     add_iuse( "VACCINE", &iuse::vaccine );
-    add_iuse( "VACUTAINER", &iuse::vacutainer );
+    add_iuse( "BLOOD_DRAW", &iuse::blood_draw );
     add_iuse( "VIBE", &iuse::vibe );
     add_iuse( "VORTEX", &iuse::vortex );
     add_iuse( "WASHCLOTHES", &iuse::washclothes );
@@ -616,7 +618,7 @@ void Item_factory::init()
     add_actor( new ups_based_armor_actor() );
     add_actor( new place_trap_actor() );
     add_actor( new emit_actor() );
-
+    add_actor( new saw_barrel_actor() );
     // An empty dummy group, it will not spawn anything. However, it makes that item group
     // id valid, so it can be used all over the place without need to explicitly check for it.
     m_template_groups["EMPTY_GROUP"] = new Item_group( Item_group::G_COLLECTION, 100, 0, 0 );
@@ -810,10 +812,12 @@ void Item_factory::check_definitions() const
             }
         }
         if( type->gunmod ) {
-            if( type->gunmod->location.empty() ) {
+            if( type->gunmod->location.str().empty() ) {
                     msg << "gunmod does not specify location" << "\n";
             }
-
+            if( ( type->gunmod->sight_dispersion < 0 ) != ( type->gunmod->aim_speed < 0 ) ){
+                    msg << "gunmod must have both sight_dispersion and aim_speed set or neither of them set" << "\n";
+            }
         }
         if( type->mod ) {
             check_ammo_type( msg, type->mod->ammo_modifier );
@@ -883,8 +887,8 @@ void Item_factory::check_definitions() const
             }
         }
         if( type->bionic ) {
-            if (!is_valid_bionic(type->bionic->bionic_id)) {
-                msg << string_format("there is no bionic with id %s", type->bionic->bionic_id.c_str()) << "\n";
+            if( !type->bionic->id.is_valid() ) {
+                msg << string_format("there is no bionic with id %s", type->bionic->id.c_str()) << "\n";
             }
         }
 
@@ -1143,7 +1147,7 @@ void Item_factory::load( islot_gun &slot, JsonObject &jo, const std::string &src
     assign( jo, "ranged_damage", slot.damage, strict );
     assign( jo, "pierce", slot.pierce, strict );
     assign( jo, "dispersion", slot.dispersion, strict );
-    assign( jo, "sight_dispersion", slot.sight_dispersion, strict, 0, int( MIN_RECOIL ) );
+    assign( jo, "sight_dispersion", slot.sight_dispersion, strict, 0, int( MAX_RECOIL ) );
     assign( jo, "recoil", slot.recoil, strict, 0 );
     assign( jo, "handling", slot.handling, strict );
     assign( jo, "durability", slot.durability, strict, 0, 10 );
@@ -1452,9 +1456,10 @@ void Item_factory::load( islot_gunmod &slot, JsonObject &jo, const std::string &
     assign( jo, "location", slot.location );
     assign( jo, "dispersion_modifier", slot.dispersion );
     assign( jo, "sight_dispersion", slot.sight_dispersion );
-    assign( jo, "aim_cost", slot.aim_cost, strict, 0 );
+    assign( jo, "aim_speed", slot.aim_speed, strict, -1 );
     assign( jo, "handling_modifier", slot.handling, strict );
     assign( jo, "range_modifier", slot.range );
+    assign( jo, "ammo_effects", slot.ammo_effects, strict );
     assign( jo, "ups_charges", slot.ups_charges );
     assign( jo, "install_time", slot.install_time );
 
@@ -1516,7 +1521,7 @@ void Item_factory::load( islot_bionic &slot, JsonObject &jo, const std::string &
 
     assign( jo, "difficulty", slot.difficulty, strict, 0 );
     // TODO: must be the same as the item type id, for compatibility
-    assign( jo, "id", slot.bionic_id, strict );
+    assign( jo, "id", slot.id, strict );
 }
 
 void Item_factory::load_bionic( JsonObject &jo, const std::string &src )
@@ -1641,6 +1646,15 @@ void Item_factory::load_basic_info( JsonObject &jo, itype &def, const std::strin
     assign( jo, "magazine_well", def.magazine_well );
     assign( jo, "explode_in_fire", def.explode_in_fire );
 
+    if( jo.has_member( "thrown_damage" ) ) {
+        JsonArray jarr = jo.get_array( "thrown_damage" );
+        def.thrown_damage = load_damage_instance( jarr );
+    } else {
+        // @todo Move to finalization
+        def.thrown_damage.clear();
+        def.thrown_damage.add_damage( DT_BASH, def.melee[DT_BASH] + def.weight / 1.0_kilogram );
+    }
+
     if( jo.has_member( "damage_states" ) ) {
         auto arr = jo.get_array( "damage_states" );
         def.damage_min = arr.get_int( 0 );
@@ -1655,7 +1669,7 @@ void Item_factory::load_basic_info( JsonObject &jo, itype &def, const std::strin
     }
 
     if( jo.has_string( "description" ) ) {
-        def.description = _( jo.get_string( "description" ).c_str() );
+        def.description = jo.get_string( "description" );
     }
 
     if( jo.has_string( "symbol" ) ) {
@@ -1831,7 +1845,7 @@ void Item_factory::migrate_item( const itype_id& id, item& obj )
 
         for( const auto& c: iter->second.contents ) {
             if( std::none_of( obj.contents.begin(), obj.contents.end(), [&]( const item& e ) { return e.typeId() == c; } ) ) {
-                obj.emplace_back( c, obj.bday );
+                obj.emplace_back( c, obj.birthday() );
             }
         }
 
@@ -1907,14 +1921,26 @@ void Item_factory::clear()
     frozen = false;
 }
 
-Item_group *make_group_or_throw( Item_spawn_data *&isd, Item_group::Type t, int ammo_chance, int magazine_chance )
+std::string to_string( Item_group::Type t )
 {
+    switch( t ) {
+        case Item_group::Type::G_COLLECTION:
+            return "collection";
+        case Item_group::Type::G_DISTRIBUTION:
+            return "distribution";
+    }
 
-    Item_group *ig = dynamic_cast<Item_group *>(isd);
-    if (ig == NULL) {
+    return "BUGGED";
+}
+
+Item_group *make_group_or_throw( const Group_tag &group_id, Item_spawn_data *&isd, Item_group::Type t,
+                                 int ammo_chance, int magazine_chance )
+{
+    Item_group *ig = dynamic_cast<Item_group *>( isd );
+    if( ig == nullptr ) {
         isd = ig = new Item_group( t, 100, ammo_chance, magazine_chance );
-    } else if (ig->type != t) {
-        throw std::runtime_error("item group already defined with different type");
+    } else if( ig->type != t ) {
+        throw std::runtime_error("item group \"" + group_id + "\" already defined with type \"" + to_string( ig->type ) + "\"" );
     }
     return ig;
 }
@@ -1996,6 +2022,25 @@ bool Item_factory::load_sub_ref( std::unique_ptr<Item_spawn_data> &ptr, JsonObje
     return true;
 }
 
+bool Item_factory::load_string(std::vector<std::string> &vec, JsonObject &obj, const std::string &name)
+{
+    bool result = false;
+    std::string temp;
+
+    if( obj.has_array( name ) ) {
+        JsonArray arr = obj.get_array( name );
+        while( arr.has_more() ) {
+            result |= arr.read_next( temp );
+            vec.push_back( temp );
+        }
+    } else if ( obj.has_member( name ) ) {
+        result |= obj.read( name, temp );
+        vec.push_back( temp );
+    }
+
+    return result;
+}
+
 void Item_factory::add_entry(Item_group *ig, JsonObject &obj)
 {
     std::unique_ptr<Item_spawn_data> ptr;
@@ -2037,6 +2082,7 @@ void Item_factory::add_entry(Item_group *ig, JsonObject &obj)
     use_modifier |= load_sub_ref( modifier->ammo, obj, "ammo", *ig );
     use_modifier |= load_sub_ref( modifier->container, obj, "container", *ig );
     use_modifier |= load_sub_ref( modifier->contents, obj, "contents", *ig );
+    use_modifier |= load_string( modifier->custom_flags, obj, "custom-flags" );
     if (use_modifier) {
         dynamic_cast<Single_item_creator *>(ptr.get())->modifier = std::move(modifier);
     }
@@ -2057,7 +2103,7 @@ void Item_factory::load_item_group( JsonArray &entries, const Group_tag &group_i
 {
     const auto type = is_collection ? Item_group::G_COLLECTION : Item_group::G_DISTRIBUTION;
     Item_spawn_data *&isd = m_template_groups[group_id];
-    Item_group* const ig = make_group_or_throw( isd, type, ammo_chance, magazine_chance );
+    Item_group* const ig = make_group_or_throw( group_id, isd, type, ammo_chance, magazine_chance );
 
     while( entries.has_more() ) {
         JsonObject subobj = entries.next_object();
@@ -2077,7 +2123,7 @@ void Item_factory::load_item_group(JsonObject &jsobj, const Group_tag &group_id,
     } else if( subtype != "collection" ) {
         jsobj.throw_error("unknown item group type", "subtype");
     }
-    ig = make_group_or_throw( isd, type, jsobj.get_int( "ammo", 0 ), jsobj.get_int( "magazine", 0 ) );
+    ig = make_group_or_throw( group_id, isd, type, jsobj.get_int( "ammo", 0 ), jsobj.get_int( "magazine", 0 ) );
 
     if (subtype == "old") {
         JsonArray items = jsobj.get_array("items");

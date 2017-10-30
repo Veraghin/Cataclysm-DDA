@@ -3,6 +3,7 @@
 
 #include "json.h"
 #include "name.h"
+#include "string_formatter.h"
 #include "output.h"
 #include "translations.h"
 #include "rng.h"
@@ -26,22 +27,16 @@ void NameGenerator::load_name( JsonObject &jo )
 
     if( usage == "given" ) {
         type |= nameIsGivenName;
-        name = pgettext( "Given Name", name.c_str() );
     } else if( usage == "family" ) {
         type |= nameIsFamilyName;
-        name = pgettext( "Family Name", name.c_str() );
     } else if( usage == "universal" ) {
         type |= nameIsGivenName | nameIsFamilyName;
-        name = pgettext( "Either Name", name.c_str() );
     } else if( usage == "backer" ) {
         type |= nameIsFullName;
-        name = pgettext( "Full Name", name.c_str() );
     } else if( usage == "city" ) {
         type |= nameIsTownName;
-        name = pgettext( "City Name", name.c_str() );
     } else if( usage == "world" ) {
         type |= nameIsWorldName;
-        name = pgettext( "World Name", name.c_str() );
     }
 
     // Gender is optional

@@ -13,9 +13,6 @@
 #include <vector>
 #include <memory>
 
-template<>
-const string_id<trap> string_id<trap>::NULL_ID( "tr_null" );
-
 namespace
 {
 
@@ -23,41 +20,48 @@ generic_factory<trap> trap_factory( "trap" );
 
 }
 
+/** @relates string_id */
 template<>
 inline bool int_id<trap>::is_valid() const
 {
     return trap_factory.is_valid( *this );
 }
 
+/** @relates int_id */
 template<>
 const trap &int_id<trap>::obj() const
 {
     return trap_factory.obj( *this );
 }
 
+/** @relates int_id */
 template<>
 const string_id<trap> &int_id<trap>::id() const
 {
     return trap_factory.convert( *this );
 }
 
+/** @relates string_id */
 template<>
 int_id<trap> string_id<trap>::id() const
 {
     return trap_factory.convert( *this, tr_null );
 }
 
+/** @relates string_id */
 template<>
 int_id<trap>::int_id( const string_id<trap> &id ) : _id( id.id() )
 {
 }
 
+/** @relates string_id */
 template<>
 const trap &string_id<trap>::obj() const
 {
     return trap_factory.obj( *this );
 }
 
+/** @relates int_id */
 template<>
 bool string_id<trap>::is_valid() const
 {
@@ -88,7 +92,7 @@ void trap::load_trap( JsonObject &jo, const std::string &src )
 void trap::load( JsonObject &jo, const std::string & )
 {
     mandatory( jo, was_loaded, "id", id );
-    mandatory( jo, was_loaded, "name", name, translated_string_reader );
+    mandatory( jo, was_loaded, "name", name_ );
     mandatory( jo, was_loaded, "color", color, color_reader{} );
     mandatory( jo, was_loaded, "symbol", sym, one_char_symbol_reader );
     mandatory( jo, was_loaded, "visibility", visibility );
@@ -99,8 +103,14 @@ void trap::load( JsonObject &jo, const std::string & )
 
     optional( jo, was_loaded, "benign", benign, false );
     optional( jo, was_loaded, "funnel_radius", funnel_radius_mm, 0 );
-    optional( jo, was_loaded, "trigger_weight", trigger_weight, -1 );
+    assign( jo, "trigger_weight", trigger_weight );
     optional( jo, was_loaded, "drops", components );
+}
+
+std::string trap::name() const
+{
+    // trap names can be empty, those are special always invisible traps. See player::search_surroundings
+    return name_.empty() ? name_ : _( name_.c_str() );
 }
 
 void trap::reset()
@@ -132,8 +142,8 @@ bool trap::detect_trap( const tripoint &pos, const player &p ) const
            // ...malus farther we are from trap...
            rl_dist( p.pos(), pos ) +
            // Police are trained to notice Something Wrong.
-           ( p.has_trait( "PROF_POLICE" ) ? 1 : 0 ) +
-           ( p.has_trait( "PROF_PD_DET" ) ? 2 : 0 ) >
+           ( p.has_trait( trait_id( "PROF_POLICE" ) ) ? 1 : 0 ) +
+           ( p.has_trait( trait_id( "PROF_PD_DET" ) ) ? 2 : 0 ) >
            // ...must all be greater than the trap visibility.
            visibility;
 }
@@ -201,7 +211,6 @@ trap_id
 tr_null,
 tr_bubblewrap,
 tr_cot,
-tr_brazier,
 tr_funnel,
 tr_metal_funnel,
 tr_makeshift_funnel,
@@ -265,10 +274,9 @@ void trap::finalize()
     const auto trapfind = []( const char *id ) {
         return trap_str_id( id ).id();
     };
-    tr_null = trap_str_id::NULL_ID.id();
+    tr_null = trap_str_id::NULL_ID().id();
     tr_bubblewrap = trapfind( "tr_bubblewrap" );
     tr_cot = trapfind( "tr_cot" );
-    tr_brazier = trapfind( "tr_brazier" );
     tr_funnel = trapfind( "tr_funnel" );
     tr_metal_funnel = trapfind( "tr_metal_funnel" );
     tr_makeshift_funnel = trapfind( "tr_makeshift_funnel" );
